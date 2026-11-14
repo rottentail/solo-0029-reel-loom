@@ -5,6 +5,7 @@
   "project_subdirection": "音视频处理",
   "supported_task_types": [
     "功能开发",
+    "Bugfix",
     "功能优化",
     "质量保障",
     "代码重构",
@@ -1386,5 +1387,10 @@
         ]
       }
     }
-  ]
+  ],
+  "bugfix_preparation": {
+    "mode": "injected_on_private_branch",
+    "authorization": "用户要求在当前项目预埋困难级Bugfix，健康分支只更新适用性画像。",
+    "basis": "已有渲染执行、产物提交、启动恢复及印本交付链路，支持跨持久化边界的缺陷设计与独立复现；不声称健康基线已存在缺陷。"
+  }
 }
