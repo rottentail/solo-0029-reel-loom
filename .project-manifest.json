@@ -121,6 +121,11 @@
       "id": "timebase",
       "path": "reel_loom/timebase.py",
       "responsibility": "timebase"
+    },
+    {
+      "id": "mixing",
+      "path": "reel_loom/mixing.py",
+      "responsibility": "mixing"
     }
   ],
   "workflows": [
@@ -439,6 +444,29 @@
         "api",
         "lineage",
         "tickets",
+        "database"
+      ]
+    },
+    {
+      "id": "ducking",
+      "name": "解说侧链混音",
+      "entry": "POST /reels (tracks+ducking) + POST /reels/{id}/ducking",
+      "success": "旁白期间背景按连续包络压低，旁白保持原电平且成片与记录/印本一致",
+      "failure": "缺背景轨、未知轨名、越界声轨与非法深度拒绝",
+      "verification": ".venv/bin/python -m reel_loom.demo --workflow ducking",
+      "steps": [
+        "输入经公开入口到领域规则",
+        "跨媒体或持久化边界提交结果",
+        "回读结果并观察拒绝路径"
+      ],
+      "module_ids": [
+        "api",
+        "reels",
+        "mixing",
+        "planner",
+        "rendering",
+        "artifacts",
+        "imprints",
         "database"
       ]
     }

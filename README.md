@@ -39,6 +39,7 @@ python3 -m venv .venv
 | 画面索引 | `POST /assets/{id}/contact-sheet`，`{"count":9,"columns":3}` |
 | 导入字幕 | `POST /assets/{id}/cues`，`{"language":"zh-CN","srt":"…"}` |
 | 映射字幕 | `POST /reels/{id}/captions`，`{"revision":1,"tracks":["cue_…"]}` |
+| 解说试听 | `POST /reels/{id}/ducking`，`{"revision":1,"ducking":{"depth_db":-14}}`，返回成片时间的压低区间与包络指纹 |
 | 成片验规 | `GET /artifacts/{id}/conformance`，真实全解码 |
 | 血缘 | `GET /tickets/{id}/lineage` |
 | 交付印本 | `POST /tickets/{id}/imprints`，`{"cue_tracks":[]}`；`GET /imprints/{id}/verify` |
@@ -47,7 +48,13 @@ python3 -m venv .venv
 
 `Idempotency-Key` 可用于创建剪辑卷、渲染单、渲染矩阵；重放返回最初创建响应，当前状态需 GET 回读。不同内容复用同一键返回 409。所有新引用要求 ready 来源；已冻结任务可以继续读退役来源。未完成渲染不能打包。取消运行单是请求，最终状态以 GET 为准；提交成片与成功状态在同一 SQLite 事务中。
 
-视频版式输出 H.264/AAC MP4，音频版式输出 PCM WAV；版式支持 1/2 声道、采样率、常量增益、contain/cover 和恒定帧率。剪辑卷当前采用顺序硬切，不具备多轨、转场、变速、字幕烧录或分段流能力。字幕保留源时间并在投影时按剪辑区间裁切；字幕轨创建后不可变。signal 输出 dBFS，loudness 才是 EBU R128，二者不可互换。
+视频版式输出 H.264/AAC MP4，音频版式输出 PCM WAV；版式支持 1/2 声道、采样率、常量增益、contain/cover 和恒定帧率。剪辑卷当前采用顺序硬切，不具备转场、变速、字幕烧录或分段流能力；多轨仅限一条背景与一条解说。字幕保留源时间并在投影时按剪辑区间裁切；字幕轨创建后不可变。signal 输出 dBFS，loudness 才是 EBU R128，二者不可互换。
+
+### 背景自动压低
+
+剪辑卷可带 `tracks`：`background`（一条贯穿镜段的床音乐）与 `narration`（一条解说），各含 `{"asset","in","out","at","gain_db"}`；`ducking` 为可选控制，字段 `depth_db`、`threshold_db`、`minimum_silence`、`attack`、`hold`、`release`，缺省 −14 dB / −40 dBFS / 0.15 s / 80 ms / 150 ms / 350 ms。有解说时背景按成片时间的一条连续包络压低：背景与解说各自只在整卷上放置一次，切点不会重新触发增益变化；停顿短于释放时间则不回弹。解说只作为侧链输入，不参与自身压低。`tracks` 缺省时行为与旧式单轨原声卷完全一致，旧卷无需迁移。
+
+压低包络由该渲染单冻结的解说字节在渲染时生成并写入 mix 计划：同一冻结快照可复用计划，改稿、换录音或改放置都会因指纹变化而重算，不会复用上一次的成片时间表。试听入口 `POST /reels/{id}/ducking` 用源静音分析并按请求修订即时重投影，不改写缓存；其 `windows`/`regions` 与渲染记录同源。mix 记录写入成片 artifact 的 `mix` 字段，包含源采样率/声道、解说讲话窗口、成片压低区间与包络摘要；包络作为 `ducking_control` 幂等产物与渲染同时提交，印本同时打包该控制 WAV，`GET /imprints/{id}/verify` 重新解码并比对记录摘要。
 
 ## 构建与生产流程校验
 
@@ -56,6 +63,6 @@ python3 -m venv .venv
 .venv/bin/python -m reel_loom.demo --workflow conformance
 ```
 
-全部 16 个有界流程记录在 `.project-runtime.json`，每条都经过真实领域与持久化路径，并观察成功或拒绝结果。测试延后：基线不包含单元/集成测试文件、不声明 test_command；这些生产示例不是完整测试保障。后续质量保障任务可从这些入口补建测试。
+全部 17 个有界流程记录在 `.project-runtime.json`，每条都经过真实领域与持久化路径，并观察成功或拒绝结果。`ducking` 流程用 44.1 kHz 立体声床与 22.05 kHz 单声道解说生成真实成片，逐点测量背景与解说的频段电平，并核验换录音后重投影、排队稿冻结、印本控制摘要一致。测试延后：基线不包含单元/集成测试文件、不声明 test_command；这些生产示例不是完整测试保障。后续质量保障任务可从这些入口补建测试。
 
 源映射见 `.task-source.json`，业务边界见 `PROJECT_SPEC.md`。题库和内部难度证据在仓库外独立维护，不属于基线运行依赖。

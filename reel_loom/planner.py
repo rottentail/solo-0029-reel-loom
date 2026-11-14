@@ -1,34 +1,56 @@
 from .errors import require
-from .values import digest
+from .mixing import delay_samples
 from .timebase import decimal, seconds
 from .probe import select_stream
+from .values import digest
 
 
 class Planner:
-    def __init__(self, assets, reels, looks):
-        self.assets, self.reels, self.looks = assets, reels, looks
+    def __init__(self, assets, reels, looks, mixing):
+        self.assets, self.reels, self.looks, self.mixing = assets, reels, looks, mixing
 
     def freeze(self, db, reel_id, revision, look_id, version):
         reel = self.reels.get(reel_id, revision, db)
         look = self.looks.get(look_id, version, db)
+        document = reel["document"]
+        tracks = document.get("tracks") or {}
         closure = {}
-        for item in reel["document"]["slices"]:
-            if item["asset"] not in closure:
-                asset = self.assets.get(item["asset"], db, ready=True)
-                closure[asset["id"]] = {"id": asset["id"], "blob": asset["blob"], "metadata": asset["metadata"]}
+        for item in document["slices"]:
+            self._collect(closure, item["asset"], db)
+        for track in tracks.values():
+            self._collect(closure, track["asset"], db)
+        picture = [closure[item["asset"]] for item in document["slices"]]
         if look["spec"]["kind"] == "video":
-            require(all(x["metadata"]["has_video"] for x in closure.values()),
+            require(all(x["metadata"]["has_video"] for x in picture),
                     "video_required", "Video looks require video in every slice")
-        else:
-            require(all(x["metadata"]["has_audio"] for x in closure.values()),
+        elif not tracks:
+            require(all(x["metadata"]["has_audio"] for x in picture),
                     "audio_required", "Audio looks require audio in every slice")
+        if tracks:
+            # With mix tracks the audible programme is the bed plus narration;
+            # the cut supplies picture only and may be silent.
+            require(all(closure[track["asset"]]["metadata"]["has_audio"] for track in tracks.values()),
+                    "audio_required", "Mix tracks require audio in their sources")
         snapshot = {"schema": 1, "reel": reel_id, "revision": reel["revision"],
-                    "reel_hash": reel["hash"], "document": reel["document"],
+                    "reel_hash": reel["hash"], "document": document,
                     "look": {"id": look["id"], "version": look["version"], "spec": look["spec"], "hash": look["hash"]},
                     "sources": closure}
         return {**snapshot, "fingerprint": digest(snapshot)}
 
-    def compile(self, snapshot, resolve, output):
+    def _collect(self, closure, asset_id, db):
+        if asset_id not in closure:
+            asset = self.assets.get(asset_id, db, ready=True)
+            closure[asset["id"]] = {"id": asset["id"], "blob": asset["blob"], "metadata": asset["metadata"]}
+
+    def compile(self, snapshot, resolve, output, mix=None):
+        spec = snapshot["look"]["spec"]
+        document = snapshot["document"]
+        tracks = document.get("tracks")
+        if tracks:
+            return self._compile_mix(snapshot, resolve, output, mix)
+        return self._compile_slices(snapshot, resolve, output)
+
+    def _compile_slices(self, snapshot, resolve, output):
         spec = snapshot["look"]["spec"]
         args, filters, segments = [], [], []
         for i, item in enumerate(snapshot["document"]["slices"]):
@@ -64,5 +86,90 @@ class Planner:
                     "-crf", str(spec["crf"]), "-c:a", "aac", "-movflags", "+faststart"]
         else:
             filters.append("".join(segments) + f"concat=n={count}:v=0:a=1[aout]")
+            maps = ["-map", "[aout]", "-c:a", "pcm_s16le"]
+        return args + ["-filter_complex", ";".join(filters)] + maps + [str(output)]
+
+    def _compile_mix(self, snapshot, resolve, output, mix):
+        """Mix picture from the cut and audio from reel-level bed/narration tracks.
+
+        The bed is trimmed to its own source window and delayed to its reel
+        position once; the cut is never asked to re-establish audio, so slice
+        boundaries cannot retrigger a gain change.  Narration is placed on the
+        same timeline and used as the ducking sidechain input only - it is not
+        itself attenuated.
+        """
+        require(mix is not None, "mix_control", "Mix render is missing its prepared audio plan")
+        spec = snapshot["look"]["spec"]
+        document = snapshot["document"]
+        tracks = document["tracks"]
+        require("narration" not in tracks or mix.get("control") is not None,
+                "mix_control", "Ducking render is missing its gain envelope")
+        duration = seconds(document["duration_tick"])
+        layout = "mono" if spec["channels"] == 1 else "stereo"
+        rate = spec["sample_rate"]
+        args, filters, segments = [], [], []
+        index, input_for = 0, {}
+        # Picture is cut from the slices exactly as in a legacy reel.
+        for i, item in enumerate(document["slices"]):
+            asset = snapshot["sources"][item["asset"]]
+            if item["asset"] not in input_for:
+                args += ["-protocol_whitelist", "file,pipe", "-i", str(resolve(asset["blob"]))]
+                input_for[item["asset"]] = index
+                index += 1
+            source = input_for[item["asset"]]
+            a, b = decimal(item["in_tick"]), decimal(item["out_tick"])
+            if spec["kind"] == "video":
+                video = select_stream(asset["metadata"], "video")
+                if spec["fit"] == "contain":
+                    sizing = (f'scale={spec["width"]}:{spec["height"]}:force_original_aspect_ratio=decrease,'
+                              f'pad={spec["width"]}:{spec["height"]}:(ow-iw)/2:(oh-ih)/2')
+                else:
+                    sizing = (f'scale={spec["width"]}:{spec["height"]}:force_original_aspect_ratio=increase,'
+                              f'crop={spec["width"]}:{spec["height"]}')
+                filters.append(f'[{source}:{video["index"]}]trim=start={a}:end={b},setpts=PTS-STARTPTS,'
+                               f'{sizing},setsar=1,fps={spec["frame_rate"]},format=yuv420p[v{i}]')
+            segments.append(f"[v{i}]" if spec["kind"] == "video" else "")
+        # Mix tracks: each is placed once on the reel timeline.
+        def place(name):
+            nonlocal index, args
+            track = tracks[name]
+            source = snapshot["sources"][track["asset"]]
+            if track["asset"] not in input_for:
+                args += ["-protocol_whitelist", "file,pipe", "-i", str(resolve(source["blob"]))]
+                input_for[track["asset"]] = index
+                index += 1
+            stream = select_stream(source["metadata"], "audio")
+            require(stream is not None, "audio_required", "Mix track source lost its audio stream")
+            start, end = decimal(track["in_tick"]), decimal(track["out_tick"])
+            delay = delay_samples(track["at_tick"], rate)
+            filters.append(f'[{input_for[track["asset"]]}:{stream["index"]}]'
+                           f'atrim=start={start}:end={end},asetpts=PTS-STARTPTS,'
+                           f'aresample={rate}:async=0,'
+                           f'aformat=sample_fmts=fltp:channel_layouts={layout},'
+                           f'volume={track["gain_db"]}dB,'
+                           f'adelay=delays={delay}S:all=1,'
+                           f'apad,atrim=duration={duration:.6f}[{name}]')
+            return name
+        background = place("background")
+        if "narration" in tracks:
+            narration = place("narration")
+            args += ["-protocol_whitelist", "file,pipe", "-i", str(mix["control"])]
+            control_input = index
+            index += 1
+            filters.append(f'[{control_input}:0]aresample={rate}:async=0,'
+                           f'aformat=sample_fmts=fltp:channel_layouts={layout},'
+                           f'apad,atrim=duration={duration:.6f}[gain]')
+            filters.append(f'[{background}][gain]amultiply[ducked]')
+            filters.append(f'[ducked][{narration}]amix=inputs=2:duration=first:normalize=0,'
+                           f'volume={spec["gain_db"]}dB[aout]')
+        else:
+            filters.append(f'[{background}],volume={spec["gain_db"]}dB[aout]')
+        if spec["kind"] == "video":
+            filters.append("".join(segments) + f"concat=n={len(segments)}:v=1:a=0[vjoined]")
+            filters.append(f'[vjoined]fps={spec["frame_rate"]},tpad=stop_mode=clone:stop_duration=0.1,'
+                           f'trim=duration={duration:.6f}[vout]')
+            maps = ["-map", "[vout]", "-map", "[aout]", "-c:v", "libx264", "-preset", "veryfast",
+                    "-crf", str(spec["crf"]), "-c:a", "aac", "-movflags", "+faststart"]
+        else:
             maps = ["-map", "[aout]", "-c:a", "pcm_s16le"]
         return args + ["-filter_complex", ";".join(filters)] + maps + [str(output)]

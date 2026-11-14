@@ -8,9 +8,10 @@ logger = logging.getLogger(__name__)
 
 
 class Renderer:
-    def __init__(self, settings, blobs, tickets, planner, processes, artifacts):
+    def __init__(self, settings, blobs, tickets, planner, processes, artifacts, mixing):
         self.settings, self.blobs, self.tickets = settings, blobs, tickets
         self.planner, self.processes, self.artifacts = planner, processes, artifacts
+        self.mixing = mixing
         self.stopping = threading.Event()
         self.threads = []
 
@@ -19,8 +20,11 @@ class Renderer:
         snapshot = ticket["snapshot"]
         suffix = ".mp4" if snapshot["look"]["spec"]["kind"] == "video" else ".wav"
         try:
-            with self.blobs.temporary(suffix) as output:
-                args = self.planner.compile(snapshot, lambda key: self.blobs.resolve(key, verify=True), output)
+            with self.blobs.temporary(suffix) as output, self.blobs.temporary(".wav") as control:
+                mix = None
+                if snapshot["document"].get("tracks"):
+                    mix = self.mixing.prepare(snapshot, lambda key: self.blobs.resolve(key, verify=True), control)
+                args = self.planner.compile(snapshot, lambda key: self.blobs.resolve(key, verify=True), output, mix)
                 duration = seconds(snapshot["document"]["duration_tick"])
                 self.processes.run(args,
                     cancelled=lambda: self.stopping.is_set() or self.tickets.cancellation_requested(ticket_id),
@@ -31,7 +35,21 @@ class Renderer:
                 if abs(actual-duration) > tolerance:
                     raise LoomError("rendition_duration", "Encoded duration differs from the frozen reel", 422,
                                     {"expected": duration, "actual": actual})
-                return self.artifacts.commit_render(ticket_id, output, {**metadata, "fingerprint": ticket["fingerprint"]})
+                encoded = {**metadata, "fingerprint": ticket["fingerprint"]}
+                extras = []
+                if mix is not None:
+                    encoded["mix"] = mix["report"]
+                    if mix.get("control") is not None:
+                        # The exact gain trace used for this mix is frozen next
+                        # to the rendition, so a delivery can prove what the bed
+                        # received and when.
+                        extras.append(("ducking_control", mix["control"], {
+                            "algorithm": mix["report"]["algorithm"],
+                            "envelope": mix["report"]["envelope"],
+                            "plan_fingerprint": mix["report"]["plan_fingerprint"],
+                            "source_sample_rate": mix["report"]["tracks"]["background"]["source_sample_rate"],
+                            "fingerprint": ticket["fingerprint"]}))
+                return self.artifacts.commit_render(ticket_id, output, encoded, extras)
         except LoomError as exc:
             self.tickets.fail(ticket_id, exc)
             return None

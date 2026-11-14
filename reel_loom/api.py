@@ -65,7 +65,7 @@ class Api:
                 return {"items": app.reels.list()}
             if method == "POST":
                 return app.reels.create(self.json_body(raw), headers.get("Idempotency-Key"))
-        match = re.fullmatch(r"/reels/([^/]+)(?:/(seal|captions|history))?", route)
+        match = re.fullmatch(r"/reels/([^/]+)(?:/(seal|captions|history|ducking))?", route)
         if match:
             reel_id, action = match.groups()
             if method == "GET" and not action:
@@ -82,6 +82,14 @@ class Api:
                 body = self.json_body(raw)
                 object_body(body, ("revision", "tracks"), ("tracks",))
                 return app.captions.project(reel_id, body.get("revision"), body["tracks"])
+            if method == "POST" and action == "ducking":
+                body = self.json_body(raw)
+                object_body(body, ("revision", "ducking"))
+                revision = body.get("revision")
+                if revision is not None:
+                    integer(revision, "revision", 1)
+                overrides = body.get("ducking", {})
+                return app.mixing.preview(reel_id, revision, overrides)
         if method == "GET" and route == "/looks":
             return {"items": app.looks.list()}
         look_history = re.fullmatch(r"/looks/([^/]+)/history", route)

@@ -18,6 +18,7 @@ from .instance import InstanceLock
 from .batches import RenderBatches
 from .conformance import Conformance
 from .lineage import Lineage
+from .mixing import Mixing
 
 
 class Application:
@@ -33,19 +34,20 @@ class Application:
             self.reels = Reels(self.db, self.assets, self.keys, settings)
             self.looks = Looks(self.db)
             self.captions = Captions(self.db, self.assets, self.reels)
-            self.planner = Planner(self.assets, self.reels, self.looks)
             self.processes = Processes(settings)
+            self.analysis = AudioAnalysis(self.db, self.assets, self.blobs, self.processes)
+            self.mixing = Mixing(self.db, self.assets, self.blobs, self.reels, self.analysis, self.processes)
+            self.planner = Planner(self.assets, self.reels, self.looks, self.mixing)
             self.tickets = Tickets(self.db, self.planner, self.keys)
             self.artifacts = Artifacts(self.db, self.blobs)
             self.batches = RenderBatches(self.db, self.planner, self.tickets, self.keys)
             self.conformance = Conformance(settings, self.blobs, self.tickets, self.artifacts)
             self.lineage = Lineage(self.db, self.tickets)
-            self.analysis = AudioAnalysis(self.db, self.assets, self.blobs, self.processes)
             self.frames = Frames(self.assets, self.blobs, self.processes, self.artifacts)
             self.imprints = Imprints(self.db, self.blobs, self.tickets, self.captions)
             self.resources = Resources(self.db, self.blobs)
             self.recovery = self.tickets.recover()
-            self.renderer = Renderer(settings, self.blobs, self.tickets, self.planner, self.processes, self.artifacts)
+            self.renderer = Renderer(settings, self.blobs, self.tickets, self.planner, self.processes, self.artifacts, self.mixing)
             if start_workers:
                 self.renderer.start()
         except BaseException:

@@ -1,7 +1,25 @@
 import json
 from .errors import require, missing, revision_conflict
-from .timebase import range_ticks, TICKS_PER_SECOND
-from .values import identifier, text, now, canonical, digest, object_body, integer
+from .mixing import normalize_ducking
+from .timebase import range_ticks, ticks, TICKS_PER_SECOND
+from .values import identifier, text, now, canonical, digest, object_body, integer, number
+
+TRACK_FIELDS = ("asset", "in", "out", "at", "gain_db", "label")
+TRACK_NAMES = ("background", "narration")
+
+
+def track_bounds(raw, label):
+    """Validate a mix track placed on the reel timeline."""
+    object_body(raw, TRACK_FIELDS, ("asset",))
+    a = ticks(raw.get("in", 0), f"{label} in")
+    b = ticks(raw["out"], f"{label} out") if "out" in raw else None
+    at = ticks(raw.get("at", 0), f"{label} at")
+    require(b is None or a < b, "empty_track", f"{label} must have positive length")
+    gain = number(raw.get("gain_db", 0), f"{label} gain_db", -24, 12)
+    require(at >= 0, "track_position", f"{label} cannot start before the reel")
+    return {"asset": raw["asset"], "in_tick": a, "out_tick": b,
+            "at_tick": at, "gain_db": gain,
+            "label": text(raw["label"], f"{label} label") if "label" in raw else label}
 
 
 class Reels:
@@ -9,7 +27,7 @@ class Reels:
         self.db, self.assets, self.keys, self.settings = db, assets, keys, settings
 
     def normalize(self, body, db):
-        object_body(body, ("title", "slices"), ("title", "slices"))
+        object_body(body, ("title", "slices", "tracks", "ducking"), ("title", "slices"))
         title = text(body["title"], "title")
         require(isinstance(body["slices"], list) and 1 <= len(body["slices"]) <= 64,
                 "slice_count", "A reel requires 1..64 slices")
@@ -24,7 +42,43 @@ class Reels:
             cursor += b-a
         require(cursor <= self.settings.max_seconds * TICKS_PER_SECOND,
                 "reel_duration", "Reel exceeds service duration limit")
-        return {"title": title, "slices": slices, "duration_tick": cursor}
+        tracks = self._tracks(body.get("tracks", {}), cursor, db)
+        ducking = None
+        if "narration" in tracks:
+            ducking = normalize_ducking(body.get("ducking", {}))
+        elif "ducking" in body:
+            require(False, "mix_tracks", "Ducking settings require a narration track")
+        return {"title": title, "slices": slices, "duration_tick": cursor,
+                "tracks": tracks, "ducking": ducking}
+
+    def _tracks(self, raw, duration, db):
+        object_body(raw, TRACK_NAMES)
+        tracks = {}
+        for name in TRACK_NAMES:
+            if name not in raw:
+                continue
+            track = track_bounds(raw[name], name)
+            asset = self.assets.get(track["asset"], db, ready=True)
+            require(asset["metadata"]["has_audio"], "audio_required",
+                    f"{name} track source has no audio stream")
+            out = track["out_tick"]
+            if out is None:
+                out = track["in_tick"] + (duration - track["at_tick"])
+            require(out <= asset["metadata"]["duration_tick"], "track_bounds",
+                    f"{name} track extends beyond its source media",
+                    available=asset["metadata"]["duration_tick"])
+            require(track["at_tick"] < duration, "track_bounds",
+                    f"{name} track starts after the reel ends")
+            # The mix is trimmed to the reel, so a bed may run past the last cut
+            # but must never be scheduled to begin after it.
+            tracks[name] = {"id": identifier("track"), "asset": asset["id"],
+                            "in_tick": track["in_tick"], "out_tick": out,
+                            "at_tick": track["at_tick"], "gain_db": track["gain_db"],
+                            "label": track["label"]}
+        if "narration" in tracks:
+            require("background" in tracks, "mix_tracks",
+                    "A narration track requires a background track")
+        return tracks
 
     def create(self, body, key=None):
         with self.db.write_unit() as db:

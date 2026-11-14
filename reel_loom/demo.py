@@ -2,10 +2,13 @@
 import argparse
 from dataclasses import replace
 import json
+import math
+from array import array
 from pathlib import Path
 import tempfile
 import threading
 import time
+import wave
 from .config import Settings
 from .application import Application
 from .api import Api
@@ -14,7 +17,67 @@ from .client import Client
 from .errors import LoomError, require
 
 WORKFLOWS = ("ingest", "revisions", "looks", "render", "signal", "waveform", "loudness",
-             "sheet", "captions", "imprint", "cancel-retry", "recovery", "resources", "matrix", "conformance", "lineage")
+             "sheet", "captions", "imprint", "cancel-retry", "recovery", "resources", "matrix", "conformance", "lineage", "ducking")
+
+# Ducking walkthrough geometry, in seconds of reel time.  Every phrase is
+# deliberately scheduled to straddle a hard cut.
+MIX_SLICE = 1.0           # six one-second cuts
+MIX_CUTS = 6
+MIX_DURATION = MIX_SLICE * MIX_CUTS
+MIX_BED_TONE = 220        # low, separated from narration
+MIX_VOICE_TONE = 1500     # high, separated from the bed
+MIX_BED_RATE = 44100      # stereo background
+MIX_VOICE_RATE = 22050    # mono narration
+MIX_ALT_RATE = 32000      # alternate recording
+MIX_NARRATION_AT = 0.35   # narration begins just before the first cut
+MIX_SPEECH = ((0.4, 1.1), (2.0, 2.7), (3.6, 4.4))   # narration source windows
+MIX_ALT_SPEECH = ((1.5, 2.1), (3.0, 3.6))
+MIX_CUT_TIMES = tuple(round(MIX_SLICE * index, 3) for index in range(1, MIX_CUTS))
+MIX_WINDOWS = tuple((round(MIX_NARRATION_AT + a, 6), round(MIX_NARRATION_AT + b, 6))
+                    for a, b in MIX_SPEECH)
+MIX_ALT_WINDOWS = tuple((round(MIX_NARRATION_AT + a, 6), round(MIX_NARRATION_AT + b, 6))
+                        for a, b in MIX_ALT_SPEECH)
+
+
+def tone_wav(path, rate, channels, duration, frequency, amplitude, windows=None):
+    """A pure sine with optional silent gaps, written directly as PCM."""
+    frames = int(round(rate * duration))
+    samples = array("h")
+    for index in range(frames):
+        second = index / rate
+        level = amplitude if (windows is None or any(a <= second < b for a, b in windows)) else 0.0
+        sample = int(round(math.sin(2 * math.pi * frequency * second) * level * 32767))
+        samples.extend((sample, sample) if channels == 2 else (sample,))
+    with wave.open(str(path), "wb") as media:
+        media.setnchannels(channels)
+        media.setsampwidth(2)
+        media.setframerate(rate)
+        media.writeframes(samples.tobytes())
+    return path
+
+
+def decode_mono(processes, path, rate=16000):
+    """Decode a rendition to mono PCM once so many probes share one pass."""
+    with tempfile.TemporaryDirectory(prefix="loom-probe-") as folder:
+        pcm = Path(folder) / "probe.pcm"
+        processes.decode_audio(path, pcm, rate)
+        values = array("h")
+        values.frombytes(pcm.read_bytes())
+    return rate, values
+
+
+def tone_level(rate, samples, start, duration, frequency):
+    """Goertzel level (dBFS) of one tone at a reel position."""
+    begin = int(round(start * rate))
+    length = max(1, int(round(duration * rate)))
+    omega = 2 * math.pi * frequency / rate
+    real = imaginary = 0.0
+    for offset in range(length):
+        sample = samples[begin + offset] / 32768
+        real += sample * math.cos(omega * offset)
+        imaginary -= sample * math.sin(omega * offset)
+    amplitude = 2 * math.hypot(real, imaginary) / length
+    return round(20 * math.log10(max(amplitude, 1e-9)), 2)
 
 
 def expect_error(action, code):
@@ -177,7 +240,163 @@ class Walkthrough:
             require(any(n["id"] == imprint["id"] for n in result["nodes"]), "walkthrough_lineage", "Imprint missing from lineage")
             failure = expect_error(lambda: c.request("GET", "/tickets/missing/lineage"), "not_found")
             return {"lineage":result,"failure":failure}
+        if name == "ducking":
+            return self.ducking()
         raise ValueError("Unknown walkthrough: " + name)
+
+    def ducking(self):
+        """Prove ducking across a cut, at mixed sample rates, through the imprint."""
+        self.finish()   # settle the queued walkthrough render before mixing
+        c = self.client
+        with self.app.blobs.temporary(".wav") as bed_path, \
+             self.app.blobs.temporary(".wav") as voice_path, \
+             self.app.blobs.temporary(".wav") as alt_path:
+            tone_wav(bed_path, MIX_BED_RATE, 2, MIX_DURATION + .4, MIX_BED_TONE, .10)
+            tone_wav(voice_path, MIX_VOICE_RATE, 1, MIX_DURATION - .1, MIX_VOICE_TONE, .25, MIX_SPEECH)
+            tone_wav(alt_path, MIX_ALT_RATE, 1, MIX_DURATION - .1, MIX_VOICE_TONE, .25, MIX_ALT_SPEECH)
+            bed = c.ingest(bed_path.read_bytes(), "bed-44100-stereo")
+            voice = c.ingest(voice_path.read_bytes(), "voice-22050-mono")
+            alternate = c.ingest(alt_path.read_bytes(), "voice-32000-mono")
+        picture = c.ingest(self.content, "silent-picture")
+        sources = {name: item["metadata"]["streams"][0]
+                   for name, item in (("bed", bed), ("voice", voice), ("alternate", alternate))}
+        require([v["sample_rate"] for v in sources.values()] == [MIX_BED_RATE, MIX_VOICE_RATE, MIX_ALT_RATE],
+                "walkthrough_ducking", "Generated tracks must carry distinct sample rates", actual=sources)
+        # Six one-second cuts: every narration phrase straddles at least one
+        # boundary and the bed runs across all of them as one continuous track.
+        cuts = [{"asset": picture["id"], "in": 0, "out": MIX_SLICE}
+                for _ in range(MIX_CUTS)]
+        tracks = {"background": {"asset": bed["id"], "in": 0, "out": MIX_DURATION + .4, "at": 0},
+                  "narration": {"asset": voice["id"], "in": 0, "out": MIX_DURATION - .1,
+                                "at": MIX_NARRATION_AT}}
+        reel = c.request("POST", "/reels", {"title": "解说样片", "slices": cuts, "tracks": tracks,
+                                            "ducking": {"depth_db": -14}})
+        c.put_look("mixdown", {"kind": "audio", "sample_rate": 48000, "channels": 2})
+        c.put_look("mixed", {"kind": "video", "width": 320, "height": 180})
+        preview = c.request("POST", f'/reels/{reel["id"]}/ducking', {})
+        require(preview["windows"] == [{"start_tick": round(a * 1e6), "end_tick": round(b * 1e6)}
+                                       for a, b in MIX_WINDOWS],
+                "walkthrough_ducking", "Preview must project source speech through the reel placement",
+                preview=preview["windows"])
+        ticket = c.render(reel["id"], "mixdown")
+        self.app.renderer.run_once()
+        ticket = c.wait(ticket["id"], 30)
+        require(ticket["state"] == "succeeded", "walkthrough_ducking", "Ducked mix did not render", ticket=ticket)
+        rendition = next(item for item in ticket["artifacts"] if item["kind"] == "rendition")
+        record = rendition["metadata"]["mix"]
+        # The same mix must work as a film: picture from the cuts, audio from
+        # the ducked bed and narration, still conforming to the frozen look.
+        film = c.render(reel["id"], "mixed")
+        self.app.renderer.run_once()
+        film = c.wait(film["id"], 30)
+        film_artifact = next(item for item in film["artifacts"] if item["kind"] == "rendition")
+        require(film["state"] == "succeeded" and film_artifact["metadata"]["has_video"] and
+                film["artifacts"][0]["metadata"]["mix"]["windows"] == record["windows"],
+                "walkthrough_ducking", "Video mix diverged from the audio mix", ticket=film.get("error"))
+        require(c.request("GET", f'/artifacts/{film_artifact["id"]}/conformance')["valid"],
+                "walkthrough_ducking", "Video mix does not conform to the frozen look")
+        with self.app.blobs.temporary(".wav") as rendered:
+            rendered.write_bytes(c.request("GET", f'/artifacts/{rendition["id"]}/content', raw=True))
+            rate, samples = decode_mono(self.app.processes, rendered)
+            # Speech lands at reel 0.75-1.45, 2.35-3.05 and 3.95-4.75, each
+            # straddling a one-second cut; the gaps between them are open bed.
+            probes = {"open": 0.15, "speech": 2.5, "pause": 3.5,
+                      "speech_after_cut": 4.2, "pause_late": 1.8}
+            levels = {label: tone_level(rate, samples, at, .25, MIX_BED_TONE)
+                      for label, at in probes.items()}
+            voice_levels = {label: tone_level(rate, samples, at, .25, MIX_VOICE_TONE)
+                            for label, at in (("speech", 2.4), ("speech_after_cut", 4.1))}
+            # Compare the bed either side of cuts that fall well inside one
+            # continuous low-gain region: a per-slice re-application of the
+            # gain would snap back to full level for the slice before the cut.
+            inside = [cut for cut in MIX_CUT_TIMES
+                      if any(region["start_tick"] + 250000 < cut * 1e6
+                             < region["end_tick"] - 150000 for region in record["regions"])]
+            require(len(inside) >= 2, "walkthrough_ducking",
+                    "Walkthrough must exercise cuts well inside a ducked phrase", cuts=inside)
+            across_cut = [{"cut": cut,
+                           "before": tone_level(rate, samples, cut - .06, .03, MIX_BED_TONE),
+                           "after": tone_level(rate, samples, cut + .01, .03, MIX_BED_TONE)}
+                          for cut in inside]
+        ducked = levels["speech"]
+        require(abs((levels["open"] - ducked) - 14) <= 1.5, "walkthrough_ducking",
+                "Measured bed reduction differs from the recorded depth",
+                open=levels["open"], ducked=ducked, record=record["ducking"])
+        require(min(levels["pause"], levels["pause_late"]) - ducked > 8, "walkthrough_ducking",
+                "Background did not return between phrases", levels=levels)
+        require(abs(voice_levels["speech"] - voice_levels["speech_after_cut"]) <= 1.0,
+                "walkthrough_ducking", "Narration was attenuated by its own sidechain", levels=voice_levels)
+        steps = [abs(item["before"] - item["after"]) for item in across_cut]
+        require(max(steps) <= 2.0, "walkthrough_ducking",
+                "Background level jumps at a cut", levels=across_cut)
+        require(record["tracks"]["background"]["source_sample_rate"] == MIX_BED_RATE and
+                record["tracks"]["narration"]["source_sample_rate"] == MIX_VOICE_RATE,
+                "walkthrough_ducking", "Mix record lost the source sample rates", tracks=record["tracks"])
+        # Editing the reel must not let the old schedule be reused.
+        replaced = c.request("PUT", f'/reels/{reel["id"]}',
+                             {"title": "换录音", "slices": cuts,
+                              "tracks": {"background": tracks["background"],
+                                         "narration": {"asset": alternate["id"], "in": 0,
+                                             "out": MIX_DURATION - .1, "at": MIX_NARRATION_AT}}},
+                             {"If-Match": "1"})
+        swapped = c.request("POST", f'/reels/{reel["id"]}/ducking', {"revision": replaced["revision"]})
+        expected_alt = [{"start_tick": round(a * 1e6), "end_tick": round(b * 1e6)}
+                        for a, b in MIX_ALT_WINDOWS]
+        require(swapped["windows"] == expected_alt, "walkthrough_ducking",
+                "Replacing the recording did not change the projected schedule", windows=swapped["windows"])
+        require(swapped["windows"] != preview["windows"], "walkthrough_ducking",
+                "New recording reused the previous ducking schedule")
+        # A queued mix keeps the revision it was frozen against.
+        queued = c.render(reel["id"], "mixdown", revision=1)
+        c.request("PUT", f'/reels/{reel["id"]}',
+                  {"title": "再改", "slices": list(reversed(cuts)),
+                   "tracks": tracks}, {"If-Match": "2"})
+        self.app.renderer.run_once()
+        frozen = c.wait(queued["id"], 30)
+        require(frozen["state"] == "succeeded" and frozen["revision"] == 1 and
+                frozen["artifacts"][0]["metadata"]["mix"]["windows"] == preview["windows"],
+                "walkthrough_ducking", "A queued mix did not keep its frozen revision",
+                ticket={k: frozen.get(k) for k in ("state", "revision")})
+        # The imprint carries the gain trace and verifies against the record.
+        imprint = c.imprint(ticket["id"])
+        verified = c.request("GET", f'/imprints/{imprint["id"]}/verify')
+        require(verified["valid"] and verified["controls"] and
+                verified["controls"][0]["sha256"] == record["envelope"]["sha256"],
+                "walkthrough_ducking", "Imprint control differs from the mix record", verified=verified)
+        # The legacy single-track reel still renders without a mix record.
+        legacy = c.request("POST", "/reels", {"title": "旧单轨",
+                                              "slices": [{"asset": bed["id"], "in": 0, "out": MIX_SLICE},
+                                                         {"asset": bed["id"], "in": MIX_SLICE, "out": 2.0}]})
+        plain = c.render(legacy["id"], "mixdown")
+        self.app.renderer.run_once()
+        plain = c.wait(plain["id"], 30)
+        require(plain["state"] == "succeeded" and "mix" not in plain["artifacts"][0]["metadata"],
+                "walkthrough_ducking", "Legacy single-track reel stopped rendering")
+        failures = {
+            "unknown_track": expect_error(lambda: c.request(
+                "POST", "/reels", {"title": "x", "slices": cuts,
+                                   "tracks": {"music": tracks["background"]}}), "unknown_fields"),
+            "narration_without_bed": expect_error(lambda: c.request(
+                "POST", "/reels", {"title": "x", "slices": cuts,
+                                   "tracks": {"narration": tracks["narration"]}}), "mix_tracks"),
+            "track_past_source": expect_error(lambda: c.request(
+                "POST", "/reels", {"title": "x", "slices": cuts,
+                                   "tracks": {"background": {"asset": bed["id"], "in": 0, "out": 7.0, "at": 0}}}),
+                "track_bounds"),
+            "ducking_without_narration": expect_error(lambda: c.request(
+                "POST", "/reels", {"title": "x", "slices": cuts,
+                                   "tracks": {"background": tracks["background"]},
+                                   "ducking": {"depth_db": -10}}), "mix_tracks"),
+            "preview_without_tracks": expect_error(lambda: c.request(
+                "POST", f'/reels/{legacy["id"]}/ducking', {}), "mix_tracks"),
+        }
+        return {"preview_windows": preview["windows"], "levels": levels, "voice_levels": voice_levels,
+                "across_cut": across_cut, "record": {k: record[k] for k in
+                ("algorithm", "ducking", "windows", "regions", "envelope", "tracks")},
+                "replaced_windows": swapped["windows"], "queued_revision": frozen["revision"],
+                "video_state": film["state"], "imprint": {"id": imprint["id"], "controls": verified["controls"]},
+                "sample_rates": {name: value["sample_rate"] for name, value in sources.items()},
+                "legacy_state": plain["state"], "failures": failures}
 
 
 def main():

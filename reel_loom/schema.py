@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS analyses(
  kind TEXT NOT NULL, settings TEXT NOT NULL, result TEXT NOT NULL,
  fingerprint TEXT NOT NULL UNIQUE, created REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mix_plans(
+ fingerprint TEXT PRIMARY KEY, plan TEXT NOT NULL, created REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS imprints(
  id TEXT PRIMARY KEY, ticket TEXT NOT NULL REFERENCES tickets(id),
  manifest TEXT NOT NULL, blob TEXT NOT NULL REFERENCES blobs(hash),

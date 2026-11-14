@@ -7,7 +7,7 @@ class Artifacts:
     def __init__(self, db, blobs):
         self.db, self.blobs = db, blobs
 
-    def commit_render(self, ticket_id, path, metadata):
+    def commit_render(self, ticket_id, path, metadata, extras=()):
         with self.db.write_unit() as db:
             row = db.execute("SELECT state,cancel FROM tickets WHERE id=?", (ticket_id,)).fetchone()
             require(row is not None, "ticket_missing", "Render ticket disappeared", 409)
@@ -18,6 +18,11 @@ class Artifacts:
             artifact_id = identifier("artifact")
             db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?,?)",
                        (artifact_id, ticket_id, None, "rendition", blob["hash"], canonical(metadata), now()))
+            for kind, extra_path, extra_metadata in extras:
+                extra_blob = self.blobs.put(extra_path, db)
+                db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?,?)",
+                           (identifier("artifact"), ticket_id, None, kind, extra_blob["hash"],
+                            canonical(extra_metadata), now()))
             db.execute("UPDATE tickets SET state='succeeded',progress=1,error=NULL,updated=? WHERE id=?", (now(), ticket_id))
             self.db.event(db, ticket_id, "succeeded", {"artifact": artifact_id, "blob": blob["hash"]})
             return self.get(artifact_id, db)
