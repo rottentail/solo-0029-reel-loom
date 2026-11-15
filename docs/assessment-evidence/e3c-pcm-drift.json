@@ -1,0 +1,25 @@
+{
+  "describe_ff4": {
+    "clipped_samples": 0,
+    "dc_offset": 2.1e-07,
+    "duration_tick": 3000000,
+    "peak_dbfs": -18.0216,
+    "rms_dbfs": -21.0741,
+    "samples": 48000
+  },
+  "describe_ff7": {
+    "clipped_samples": 0,
+    "dc_offset": 2.1e-07,
+    "duration_tick": 3000000,
+    "peak_dbfs": -18.0216,
+    "rms_dbfs": -21.074,
+    "samples": 48000
+  },
+  "differing_samples": 8807,
+  "input": "probe-sine44k-stereo.wav (44.1 kHz stereo sine -> 16 kHz mono s16)",
+  "max_abs_sample_delta": 1,
+  "samples": 48000,
+  "silence_ff4": [],
+  "silence_ff7": [],
+  "waveform8_equal": false
+}

@@ -1,0 +1,86 @@
+{
+  "loudness_after_swap": {
+    "integrated_lufs": -38.25,
+    "range_lu": 0.0,
+    "silence": false,
+    "standard": "EBU R128",
+    "threshold_lufs": -48.25,
+    "true_peak_dbtp": -35.27,
+    "units": "LUFS/dBTP"
+  },
+  "loudness_changed_with_stream_order": true,
+  "loudness_first_stream": {
+    "integrated_lufs": -27.84,
+    "range_lu": 0.0,
+    "silence": false,
+    "standard": "EBU R128",
+    "threshold_lufs": -37.84,
+    "true_peak_dbtp": -26.19,
+    "units": "LUFS/dBTP"
+  },
+  "probed_streams": [
+    {
+      "codec": "h264",
+      "duration_tick": 3000000,
+      "frame_rate": "25",
+      "frames": 75,
+      "height": 90,
+      "index": 0,
+      "kind": "video",
+      "pixel_format": "yuv420p",
+      "start_tick": 0,
+      "time_base": "1/12800",
+      "width": 160
+    },
+    {
+      "channels": 2,
+      "codec": "aac",
+      "duration_tick": 3000000,
+      "index": 1,
+      "kind": "audio",
+      "layout": "stereo",
+      "sample_rate": 48000,
+      "start_tick": 0,
+      "time_base": "1/48000"
+    },
+    {
+      "channels": 1,
+      "codec": "aac",
+      "duration_tick": 3000000,
+      "index": 2,
+      "kind": "audio",
+      "layout": "mono",
+      "sample_rate": 48000,
+      "start_tick": 0,
+      "time_base": "1/48000"
+    }
+  ],
+  "render_output_depends_on_stream_order": true,
+  "render_wav_blob_original_order": "a2953d811182cc79662a34e6ccaebdd2cffbdd4bc5afd2e082970a61c94f0ef6",
+  "render_wav_blob_swapped_order": "7be99d271c2e6480b296cf7895273a8edd6665d7ffb9aa47c7319148bea83991",
+  "swapped_asset": "asset_cd9593e597b54ce59fa937242e0aca20",
+  "swapped_probed_audio_order": [
+    {
+      "channels": 1,
+      "codec": "aac",
+      "duration_tick": 3000000,
+      "index": 1,
+      "kind": "audio",
+      "layout": "mono",
+      "sample_rate": 48000,
+      "start_tick": 0,
+      "time_base": "1/48000"
+    },
+    {
+      "channels": 2,
+      "codec": "aac",
+      "duration_tick": 3000000,
+      "index": 2,
+      "kind": "audio",
+      "layout": "stereo",
+      "sample_rate": 48000,
+      "start_tick": 0,
+      "time_base": "1/48000"
+    }
+  ]
+}

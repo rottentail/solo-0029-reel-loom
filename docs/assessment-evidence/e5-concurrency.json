@@ -1,0 +1,25 @@
+{
+  "concurrent_imprint": {
+    "imprint_rows": 1,
+    "unique_ids": 1
+  },
+  "concurrent_render": {
+    "blob1": "1b69cffe9922a4d454eddb5da19e1f61a3fca26e5acc4d915587b51e7ee3f24b",
+    "blob2": "1b69cffe9922a4d454eddb5da19e1f61a3fca26e5acc4d915587b51e7ee3f24b",
+    "same_fingerprint": true,
+    "shared_blob": true,
+    "states": [
+      "succeeded",
+      "succeeded"
+    ]
+  },
+  "concurrent_signal": {
+    "analysis_rows": 1,
+    "analyzed_events": 1,
+    "errors": [],
+    "returned_ids": [
+      "analysis_dcf0f30ea68243479ca9b3eddd3ed82c"
+    ],
+    "unique_ids": 1
+  }
+}

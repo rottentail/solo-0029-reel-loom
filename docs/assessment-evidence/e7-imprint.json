@@ -1,0 +1,35 @@
+{
+  "artifacts_byte_identical": true,
+  "imprint_valid_after_reel_edit": true,
+  "imprints": {
+    "i1": {
+      "fingerprint": "b6dca0c8abf48c6c95f8cee18f944f25c7e520c09e563ade5619e3555639ef15",
+      "id": "imprint_a91ac0acf0684f78be359f963f928879"
+    },
+    "i2": {
+      "fingerprint": "3f422599201ccdfd9faae24d2c9db690eebb1d53bb97b70b4590eea69ec54dd9",
+      "id": "imprint_129bf8f554e2449fbb9e9ca57663290b"
+    },
+    "same_imprint_identity": false,
+    "same_package_blob": false,
+    "same_packaged_media_blob": true
+  },
+  "lineage_edge_relations": [
+    "content",
+    "includes",
+    "packages",
+    "produced_by",
+    "renders",
+    "uses_look"
+  ],
+  "lineage_node_kinds": [
+    "blob",
+    "imprint",
+    "look_version",
+    "reel_revision",
+    "render",
+    "rendition",
+    "source_media"
+  ],
+  "tickets_same_fingerprint": true
+}

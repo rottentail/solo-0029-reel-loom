@@ -1,0 +1,17 @@
+{
+  "after_swap_returned": {
+    "id": "analysis_d7acdc0d055c43dbbf7e0e4338b8dce9",
+    "rms_dbfs": -21.074,
+    "same_id": true
+  },
+  "cached_matches_fresh_ff4": false,
+  "ff7_analysis": {
+    "id": "analysis_d7acdc0d055c43dbbf7e0e4338b8dce9",
+    "peak_dbfs": -18.0216,
+    "rms_dbfs": -21.074
+  },
+  "fresh_ff4_computation": {
+    "peak_dbfs": -18.0216,
+    "rms_dbfs": -21.0741
+  }
+}

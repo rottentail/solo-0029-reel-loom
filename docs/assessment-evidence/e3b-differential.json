@@ -1,0 +1,102 @@
+{
+  "bursts": {
+    "loudnorm_i": [
+      "-20.45",
+      "-20.45"
+    ],
+    "loudnorm_identical": true,
+    "loudnorm_lra": [
+      "3.20",
+      "3.20"
+    ],
+    "loudnorm_tp": [
+      "-17.10",
+      "-17.10"
+    ],
+    "pcm_identical": false,
+    "pcm_len": [
+      192000,
+      192000
+    ]
+  },
+  "sine44k-stereo": {
+    "loudnorm_i": [
+      "-21.11",
+      "-21.11"
+    ],
+    "loudnorm_identical": true,
+    "loudnorm_lra": [
+      "0.00",
+      "0.00"
+    ],
+    "loudnorm_tp": [
+      "-18.06",
+      "-18.06"
+    ],
+    "pcm_identical": false,
+    "pcm_len": [
+      96000,
+      96000
+    ]
+  },
+  "sine48k-stereo": {
+    "loudnorm_i": [
+      "-21.65",
+      "-21.65"
+    ],
+    "loudnorm_identical": true,
+    "loudnorm_lra": [
+      "0.00",
+      "0.00"
+    ],
+    "loudnorm_tp": [
+      "-18.06",
+      "-18.06"
+    ],
+    "pcm_identical": false,
+    "pcm_len": [
+      96000,
+      96000
+    ]
+  },
+  "surround51": {
+    "loudnorm_i": [
+      "-inf",
+      "-inf"
+    ],
+    "loudnorm_identical": true,
+    "loudnorm_lra": [
+      "0.00",
+      "0.00"
+    ],
+    "loudnorm_tp": [
+      "-inf",
+      "-inf"
+    ],
+    "pcm_identical": true,
+    "pcm_len": [
+      96000,
+      96000
+    ]
+  },
+  "sweep-high": {
+    "loudnorm_i": [
+      "-17.75",
+      "-17.75"
+    ],
+    "loudnorm_identical": true,
+    "loudnorm_lra": [
+      "0.00",
+      "0.00"
+    ],
+    "loudnorm_tp": [
+      "-16.07",
+      "-16.07"
+    ],
+    "pcm_identical": false,
+    "pcm_len": [
+      96000,
+      96000
+    ]
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "ff4": "/tmp/loom-tools-alt/extracted/imageio_ffmpeg/binaries/ffmpeg-linuxaarch64-v4.2.2",
+  "ff7": "/tmp/loom-venv/lib/python3.11/site-packages/imageio_ffmpeg/binaries/ffmpeg-linux-aarch64-v7.0.2",
+  "phase1_ff7": {
+    "imprint": "imprint_3ec2b467c43a4acbbde2d67382311bcd",
+    "imprint_fingerprint": "3ab963af736b5bd57508278e36a8952740c2df82973fad29a0abcb4871323a38",
+    "imprint_valid": true,
+    "loudness_id": "analysis_2c47677247bd489ea637c7426a86840a",
+    "loudness_result": {
+      "integrated_lufs": -22.21,
+      "range_lu": 0.2,
+      "silence": false,
+      "standard": "EBU R128",
+      "threshold_lufs": -32.37,
+      "true_peak_dbtp": -17.25,
+      "units": "LUFS/dBTP"
+    },
+    "signal_id": "analysis_bba36bc45be74934a065ad238d9c3889",
+    "signal_result": {
+      "peak_dbfs": -17.6154,
+      "rms_dbfs": -21.9041,
+      "samples": 48128
+    },
+    "video_blob": "1b69cffe9922a4d454eddb5da19e1f61a3fca26e5acc4d915587b51e7ee3f24b",
+    "video_fingerprint": "9383609f825fa4b57a47c361eaacad0e3f62355d335ebbdf8d1492ed1a5ac18d",
+    "video_ticket": "render_bb2d9b0091a345ee9e9d7f0d4640f859",
+    "wav_blob": "42c735a77eae8413381a0ad5ce5fb52110b570a54b1d6fc7e2739d0feb3d7d2f",
+    "wav_ticket": "render_657c02ac43e64d83afa25aa0fafabe58"
+  },
+  "phase2_cache_after_tool_swap": {
+    "loudness_result_unchanged": true,
+    "loudness_same_id": true,
+    "signal_result_unchanged": true,
+    "signal_same_id": true
+  },
+  "phase2_conformance": {
+    "ff4_artifact_valid": true,
+    "ff7_artifact_valid": true
+  },
+  "phase2_imprint_verify": true,
+  "phase2_rerender_ff4": {
+    "same_fingerprint_as_ff7_ticket": true,
+    "states": [
+      "succeeded",
+      "succeeded"
+    ],
+    "video_blob_ff4": "4ea5c6eebb4c65cc93eaada5e3ca78be38bc22170460645e8d108545199bdd07",
+    "video_bytes_differ": true,
+    "wav_blob_ff4": "50a22969c7a33dd04e70877deef2786c6bf1e432c7caf8b37ae87f0c612f1e15",
+    "wav_bytes_differ": true
+  },
+  "phase3_manual": {
+    "loudnorm_ff4": {
+      "input_i": "-22.21",
+      "input_lra": "0.20",
+      "input_thresh": "-32.37",
+      "input_tp": "-17.25"
+    },
+    "loudnorm_ff7": {
+      "input_i": "-22.21",
+      "input_lra": "0.20",
+      "input_thresh": "-32.37",
+      "input_tp": "-17.25"
+    },
+    "pcm_identical": true,
+    "pcm_sha256_ff4": "e414476794146423cfef8ff681a0f8134efc0e2faccf338bcab5c9a60e0ea921",
+    "pcm_sha256_ff7": "e414476794146423cfef8ff681a0f8134efc0e2faccf338bcab5c9a60e0ea921"
+  }
+}

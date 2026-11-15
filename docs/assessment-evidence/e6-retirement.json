@@ -1,0 +1,21 @@
+{
+  "deterministic": {
+    "conformance_after_retire": true,
+    "existing_analysis_still_readable": true,
+    "frozen_ticket_render_after_retire": "succeeded",
+    "imprint_verify_after_retire": true,
+    "new_analysis_on_retired": "asset_retired",
+    "new_reel_on_retired": "asset_retired",
+    "new_ticket_on_frozen_revision": "asset_retired",
+    "reconcile_consistent": true,
+    "restored_state": "ready",
+    "sweep_removed": []
+  },
+  "race_attempts": [
+    {
+      "asset_state_after": "retired",
+      "code": "asset_retired",
+      "outcome": "LoomError"
+    }
+  ]
+}

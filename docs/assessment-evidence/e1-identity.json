@@ -1,0 +1,82 @@
+{
+  "analysis_cache": {
+    "loudness_fingerprint": "a8dc75c84c583bd5138d0cbc39fb81a234eff6062bc89cc0d284b34f2786e88a",
+    "loudness_same_id": true,
+    "signal_fingerprint": "f0b8df7021e52624ebdf0ca7809aa097e8eca54ff44ffdac19f601e2a459062e",
+    "signal_same_id": true
+  },
+  "asset": {
+    "blob": "5f13e1b03481ac1881b3c8d4832bd824c78fa8b08b6fbc4720e23da096f3b3d2",
+    "id": "asset_ec0a1f26c8f049f383eafe8b57b1ac01",
+    "metadata_streams": [
+      [
+        0,
+        "video",
+        "h264"
+      ],
+      [
+        1,
+        "audio",
+        "aac"
+      ]
+    ]
+  },
+  "dedup_same_bytes_same_asset": true,
+  "remux": {
+    "new_asset": "asset_68d588ace4be41d4a075cefe879cdc3e",
+    "new_blob": "7b6dbfe0f7a10d2568d67202e5f99a16add123fa3d65e710a1b30568d42d8af2",
+    "same_asset": false
+  },
+  "remux_analysis_ids_differ": true,
+  "remux_loudness_identical": true,
+  "remux_loudness_result": {
+    "integrated_lufs": -22.21,
+    "range_lu": 0.2,
+    "silence": false,
+    "standard": "EBU R128",
+    "threshold_lufs": -32.37,
+    "true_peak_dbtp": -17.25,
+    "units": "LUFS/dBTP"
+  },
+  "remux_signal_identical": true,
+  "remux_signal_result": {
+    "clipped_samples": 0,
+    "peak_dbfs": -17.6154,
+    "rms_dbfs": -21.9041,
+    "samples": 48128
+  },
+  "settings_change_new_identity": true,
+  "silence": {
+    "loudness": {
+      "integrated_lufs": null,
+      "range_lu": 0.0,
+      "silence": true,
+      "standard": "EBU R128",
+      "threshold_lufs": -70.0,
+      "true_peak_dbtp": null,
+      "units": "LUFS/dBTP"
+    },
+    "signal": {
+      "peak_dbfs": -240.0,
+      "rms_dbfs": -240.0,
+      "units": "dBFS"
+    }
+  },
+  "units_contrast": {
+    "loudness_result": {
+      "integrated_lufs": -22.21,
+      "range_lu": 0.2,
+      "silence": false,
+      "standard": "EBU R128",
+      "threshold_lufs": -32.37,
+      "true_peak_dbtp": -17.25,
+      "units": "LUFS/dBTP"
+    },
+    "signal_result": {
+      "note": "PCM peak/RMS; not EBU R128 integrated loudness",
+      "peak_dbfs": -17.6154,
+      "rms_dbfs": -21.9041,
+      "units": "dBFS"
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "conformance_decoded_frames": {
+    "audio": 104,
+    "video": 55
+  },
+  "conformance_repeat_valid": [
+    true,
+    true
+  ],
+  "loudness_result": {
+    "integrated_lufs": -22.21,
+    "range_lu": 0.2,
+    "silence": false,
+    "standard": "EBU R128",
+    "threshold_lufs": -32.37,
+    "true_peak_dbtp": -17.25,
+    "units": "LUFS/dBTP"
+  },
+  "loudness_x3_identical_result": true,
+  "loudness_x3_same_id": true,
+  "signal_x3_identical_result": true,
+  "tickets": {
+    "fingerprint": "7a80d5433edae425761a9e8f4d86848b6e25be06f5242ed5f7124d869a100315",
+    "ids": [
+      "render_b673f357b6ff413092156fae9dd93a33",
+      "render_0b2a260b2f924171aa636733840d0f91"
+    ],
+    "same_fingerprint": true
+  },
+  "video_render_twice": {
+    "artifact_ids": [
+      "artifact_c972bc11b8b44d8997801164612bedcd",
+      "artifact_33709f7073ef42b3a7de0cc3bac56f47"
+    ],
+    "blob1": "c835305bcfc068002030ef769b77127e9955b549bb68d4fd3314d35927892ba7",
+    "blob2": "c835305bcfc068002030ef769b77127e9955b549bb68d4fd3314d35927892ba7",
+    "byte_identical": true,
+    "state": [
+      "succeeded",
+      "succeeded"
+    ]
+  },
+  "wav_render_twice": {
+    "blob1": "661cf9a96bdcb42d683c8dbf67d72a0b07796a25067775687a74e3b4881dfa99",
+    "blob2": "661cf9a96bdcb42d683c8dbf67d72a0b07796a25067775687a74e3b4881dfa99",
+    "byte_identical": true
+  }
+}
